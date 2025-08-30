@@ -32,6 +32,8 @@
             display: block;
             margin: auto;
             box-shadow: 0 0 20px rgba(255, 255, 255, 0.3);
+            max-width: 100vw;
+            max-height: 60vh;
         }
         
         #ui {
@@ -152,12 +154,126 @@
         
         .speed-indicator {
             position: absolute;
-            bottom: 10px;
+            bottom: 120px;
             right: 10px;
             background: rgba(0, 0, 0, 0.7);
-            padding: 15px;
+            padding: 10px;
             border-radius: 10px;
             backdrop-filter: blur(10px);
+            font-size: 12px;
+        }
+        
+        /* Mobile Controls */
+        #mobileControls {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            height: 120px;
+            background: rgba(0, 0, 0, 0.8);
+            display: none;
+            backdrop-filter: blur(10px);
+            border-top: 2px solid rgba(255, 255, 255, 0.1);
+        }
+        
+        .control-area {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            height: 100%;
+            padding: 10px 20px;
+        }
+        
+        .joystick {
+            width: 80px;
+            height: 80px;
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 50%;
+            position: relative;
+            border: 3px solid rgba(255, 255, 255, 0.5);
+        }
+        
+        .joystick-knob {
+            width: 35px;
+            height: 35px;
+            background: linear-gradient(45deg, #ff6b6b, #ee5a5a);
+            border-radius: 50%;
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            transition: all 0.1s ease;
+            border: 2px solid white;
+        }
+        
+        .action-buttons {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+        
+        .mobile-btn {
+            width: 60px;
+            height: 60px;
+            background: linear-gradient(45deg, #4ecdc4, #44a08d);
+            border: none;
+            border-radius: 50%;
+            color: white;
+            font-size: 20px;
+            font-weight: bold;
+            border: 3px solid white;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+            touch-action: manipulation;
+        }
+        
+        .mobile-btn:active {
+            transform: scale(0.95);
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
+        }
+        
+        .mobile-btn.boost {
+            background: linear-gradient(45deg, #ff6b6b, #ee5a5a);
+        }
+        
+        .mobile-btn.brake {
+            background: linear-gradient(45deg, #feca57, #ff9ff3);
+        }
+        
+        @media (max-width: 768px) {
+            #mobileControls {
+                display: block;
+            }
+            
+            #controls {
+                display: none !important;
+            }
+            
+            #ui {
+                top: 5px;
+                left: 5px;
+                padding: 8px;
+                font-size: 12px;
+            }
+            
+            #playerList {
+                top: 5px;
+                right: 5px;
+                padding: 8px;
+                font-size: 12px;
+                max-width: 150px;
+            }
+            
+            .speed-indicator {
+                bottom: 130px;
+                right: 5px;
+                padding: 8px;
+                font-size: 11px;
+            }
+            
+            .speed-bar {
+                width: 100px;
+                height: 15px;
+            }
         }
         
         .speed-bar {
@@ -187,7 +303,7 @@
             <button class="btn" onclick="joinGame()">🚗 เข้าร่วมเกม</button>
         </div>
         
-        <canvas id="gameCanvas" width="1000" height="600" style="display: none;"></canvas>
+        <canvas id="gameCanvas" width="800" height="500" style="display: none;"></canvas>
         
         <div id="ui" style="display: none;">
             <h3>🏆 คะแนน</h3>
@@ -216,6 +332,20 @@
             </div>
             <div id="speedText">0 km/h</div>
         </div>
+        
+        <!-- Mobile Controls -->
+        <div id="mobileControls">
+            <div class="control-area">
+                <div class="joystick" id="joystick">
+                    <div class="joystick-knob" id="joystickKnob"></div>
+                </div>
+                
+                <div class="action-buttons">
+                    <button class="mobile-btn boost" id="boostBtn">🚀</button>
+                    <button class="mobile-btn brake" id="brakeBtn">🛑</button>
+                </div>
+            </div>
+        </div>
     </div>
 
     <script>
@@ -232,7 +362,17 @@
                 this.powerUps = [];
                 this.gameLoop = null;
                 
+                // Mobile controls
+                this.mobileInput = {
+                    joystickActive: false,
+                    joystickX: 0,
+                    joystickY: 0,
+                    boost: false,
+                    brake: false
+                };
+                
                 this.setupEventListeners();
+                this.setupMobileControls();
                 this.generateObstacles();
                 this.generatePowerUps();
             }
@@ -244,6 +384,102 @@
                 
                 window.addEventListener('keyup', (e) => {
                     this.keys[e.code] = false;
+                });
+            }
+            
+            setupMobileControls() {
+                const joystick = document.getElementById('joystick');
+                const joystickKnob = document.getElementById('joystickKnob');
+                const boostBtn = document.getElementById('boostBtn');
+                const brakeBtn = document.getElementById('brakeBtn');
+                
+                let joystickRect = joystick.getBoundingClientRect();
+                
+                // Joystick controls
+                const handleJoystickStart = (e) => {
+                    e.preventDefault();
+                    this.mobileInput.joystickActive = true;
+                    joystickRect = joystick.getBoundingClientRect();
+                };
+                
+                const handleJoystickMove = (e) => {
+                    if (!this.mobileInput.joystickActive) return;
+                    e.preventDefault();
+                    
+                    const touch = e.touches ? e.touches[0] : e;
+                    const centerX = joystickRect.left + joystickRect.width / 2;
+                    const centerY = joystickRect.top + joystickRect.height / 2;
+                    
+                    let deltaX = touch.clientX - centerX;
+                    let deltaY = touch.clientY - centerY;
+                    
+                    const distance = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
+                    const maxDistance = joystickRect.width / 2 - 20;
+                    
+                    if (distance > maxDistance) {
+                        deltaX = (deltaX / distance) * maxDistance;
+                        deltaY = (deltaY / distance) * maxDistance;
+                    }
+                    
+                    this.mobileInput.joystickX = deltaX / maxDistance;
+                    this.mobileInput.joystickY = deltaY / maxDistance;
+                    
+                    joystickKnob.style.transform = `translate(${deltaX}px, ${deltaY}px)`;
+                };
+                
+                const handleJoystickEnd = (e) => {
+                    e.preventDefault();
+                    this.mobileInput.joystickActive = false;
+                    this.mobileInput.joystickX = 0;
+                    this.mobileInput.joystickY = 0;
+                    joystickKnob.style.transform = 'translate(0, 0)';
+                };
+                
+                // Touch events for joystick
+                joystick.addEventListener('touchstart', handleJoystickStart);
+                joystick.addEventListener('touchmove', handleJoystickMove);
+                joystick.addEventListener('touchend', handleJoystickEnd);
+                joystick.addEventListener('touchcancel', handleJoystickEnd);
+                
+                // Mouse events for joystick (desktop testing)
+                joystick.addEventListener('mousedown', handleJoystickStart);
+                window.addEventListener('mousemove', handleJoystickMove);
+                window.addEventListener('mouseup', handleJoystickEnd);
+                
+                // Boost button
+                boostBtn.addEventListener('touchstart', (e) => {
+                    e.preventDefault();
+                    this.mobileInput.boost = true;
+                });
+                boostBtn.addEventListener('touchend', (e) => {
+                    e.preventDefault();
+                    this.mobileInput.boost = false;
+                });
+                boostBtn.addEventListener('mousedown', (e) => {
+                    e.preventDefault();
+                    this.mobileInput.boost = true;
+                });
+                boostBtn.addEventListener('mouseup', (e) => {
+                    e.preventDefault();
+                    this.mobileInput.boost = false;
+                });
+                
+                // Brake button
+                brakeBtn.addEventListener('touchstart', (e) => {
+                    e.preventDefault();
+                    this.mobileInput.brake = true;
+                });
+                brakeBtn.addEventListener('touchend', (e) => {
+                    e.preventDefault();
+                    this.mobileInput.brake = false;
+                });
+                brakeBtn.addEventListener('mousedown', (e) => {
+                    e.preventDefault();
+                    this.mobileInput.brake = true;
+                });
+                brakeBtn.addEventListener('mouseup', (e) => {
+                    e.preventDefault();
+                    this.mobileInput.brake = false;
                 });
             }
             
@@ -325,6 +561,7 @@
                 document.getElementById('controls').style.display = 'block';
                 document.getElementById('playerList').style.display = 'block';
                 document.getElementById('speedIndicator').style.display = 'block';
+                document.getElementById('mobileControls').style.display = 'block';
                 
                 this.gameLoop = setInterval(() => {
                     this.update();
@@ -377,12 +614,31 @@
                 let acceleration = 0;
                 let turning = 0;
                 
+                // Keyboard controls
                 if (this.keys['ArrowUp'] || this.keys['KeyW']) acceleration += player.acceleration;
                 if (this.keys['ArrowDown'] || this.keys['KeyS']) acceleration -= player.acceleration;
                 if (this.keys['ArrowLeft'] || this.keys['KeyA']) turning -= 0.05;
                 if (this.keys['ArrowRight'] || this.keys['KeyD']) turning += 0.05;
                 if (this.keys['ShiftLeft'] || this.keys['ShiftRight']) acceleration *= 1.5;
                 if (this.keys['Space']) {
+                    player.vx *= 0.9;
+                    player.vy *= 0.9;
+                }
+                
+                // Mobile controls
+                if (this.mobileInput.joystickActive) {
+                    // Forward/backward from joystick Y
+                    acceleration += -this.mobileInput.joystickY * player.acceleration;
+                    
+                    // Left/right from joystick X
+                    turning += this.mobileInput.joystickX * 0.05;
+                }
+                
+                if (this.mobileInput.boost) {
+                    acceleration *= 1.5;
+                }
+                
+                if (this.mobileInput.brake) {
                     player.vx *= 0.9;
                     player.vy *= 0.9;
                 }
