@@ -191,6 +191,8 @@
             border-radius: 50%;
             position: relative;
             border: 3px solid rgba(255, 255, 255, 0.5);
+            touch-action: none;
+            user-select: none;
         }
         
         .joystick-knob {
@@ -201,9 +203,11 @@
             position: absolute;
             top: 50%;
             left: 50%;
-            transform: translate(-50%, -50%);
-            transition: all 0.1s ease;
+            transform: translate3d(-50%, -50%, 0);
+            will-change: transform;
             border: 2px solid white;
+            touch-action: none;
+            pointer-events: none;
         }
         
         .action-buttons {
@@ -224,6 +228,8 @@
             border: 3px solid white;
             box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
             touch-action: manipulation;
+            user-select: none;
+            transition: transform 0.1s ease;
         }
         
         .mobile-btn:active {
@@ -253,6 +259,8 @@
                 left: 5px;
                 padding: 8px;
                 font-size: 12px;
+                width: auto;
+                max-width: 120px;
             }
             
             #playerList {
@@ -260,7 +268,7 @@
                 right: 5px;
                 padding: 8px;
                 font-size: 12px;
-                max-width: 150px;
+                max-width: 120px;
             }
             
             .speed-indicator {
@@ -273,6 +281,50 @@
             .speed-bar {
                 width: 100px;
                 height: 15px;
+            }
+        }
+        
+        @media (max-width: 768px) and (orientation: portrait) {
+            #ui {
+                top: 5px;
+                left: 50%;
+                transform: translateX(-50%);
+                text-align: center;
+                max-width: 200px;
+            }
+            
+            #playerList {
+                top: 80px;
+                right: 5px;
+                max-width: 100px;
+            }
+            
+            .player-item {
+                margin: 3px 0;
+                padding: 5px;
+                font-size: 10px;
+            }
+            
+            .player-color {
+                width: 15px;
+                height: 15px;
+            }
+            
+            .speed-indicator {
+                bottom: 130px;
+                left: 5px;
+                right: auto;
+                padding: 6px;
+                font-size: 10px;
+            }
+            
+            .speed-bar {
+                width: 80px;
+                height: 12px;
+            }
+            
+            #gameCanvas {
+                max-height: 50vh;
             }
         }
         
@@ -303,7 +355,7 @@
             <button class="btn" onclick="joinGame()">🚗 เข้าร่วมเกม</button>
         </div>
         
-        <canvas id="gameCanvas" width="800" height="500" style="display: none;"></canvas>
+        <canvas id="gameCanvas" width="800" height="400" style="display: none;"></canvas>
         
         <div id="ui" style="display: none;">
             <h3>🏆 คะแนน</h3>
@@ -394,24 +446,54 @@
                 const brakeBtn = document.getElementById('brakeBtn');
                 
                 let joystickRect = joystick.getBoundingClientRect();
+                let activeTouch = null;
+                
+                // Update joystick rect on window resize
+                window.addEventListener('resize', () => {
+                    joystickRect = joystick.getBoundingClientRect();
+                });
                 
                 // Joystick controls
                 const handleJoystickStart = (e) => {
                     e.preventDefault();
+                    e.stopPropagation();
                     this.mobileInput.joystickActive = true;
                     joystickRect = joystick.getBoundingClientRect();
+                    
+                    if (e.touches && e.touches.length > 0) {
+                        activeTouch = e.touches[0].identifier;
+                    }
                 };
                 
                 const handleJoystickMove = (e) => {
                     if (!this.mobileInput.joystickActive) return;
                     e.preventDefault();
+                    e.stopPropagation();
                     
-                    const touch = e.touches ? e.touches[0] : e;
+                    let clientX, clientY;
+                    
+                    if (e.touches) {
+                        // Find the correct touch
+                        let touch = null;
+                        for (let i = 0; i < e.touches.length; i++) {
+                            if (e.touches[i].identifier === activeTouch) {
+                                touch = e.touches[i];
+                                break;
+                            }
+                        }
+                        if (!touch) return;
+                        clientX = touch.clientX;
+                        clientY = touch.clientY;
+                    } else {
+                        clientX = e.clientX;
+                        clientY = e.clientY;
+                    }
+                    
                     const centerX = joystickRect.left + joystickRect.width / 2;
                     const centerY = joystickRect.top + joystickRect.height / 2;
                     
-                    let deltaX = touch.clientX - centerX;
-                    let deltaY = touch.clientY - centerY;
+                    let deltaX = clientX - centerX;
+                    let deltaY = clientY - centerY;
                     
                     const distance = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
                     const maxDistance = joystickRect.width / 2 - 20;
@@ -424,63 +506,71 @@
                     this.mobileInput.joystickX = deltaX / maxDistance;
                     this.mobileInput.joystickY = deltaY / maxDistance;
                     
-                    joystickKnob.style.transform = `translate(${deltaX}px, ${deltaY}px)`;
+                    // Use transform3d for better performance
+                    joystickKnob.style.transform = `translate3d(${deltaX}px, ${deltaY}px, 0)`;
                 };
                 
                 const handleJoystickEnd = (e) => {
                     e.preventDefault();
+                    e.stopPropagation();
                     this.mobileInput.joystickActive = false;
                     this.mobileInput.joystickX = 0;
                     this.mobileInput.joystickY = 0;
-                    joystickKnob.style.transform = 'translate(0, 0)';
+                    activeTouch = null;
+                    joystickKnob.style.transform = 'translate3d(0, 0, 0)';
                 };
                 
                 // Touch events for joystick
-                joystick.addEventListener('touchstart', handleJoystickStart);
-                joystick.addEventListener('touchmove', handleJoystickMove);
-                joystick.addEventListener('touchend', handleJoystickEnd);
-                joystick.addEventListener('touchcancel', handleJoystickEnd);
+                joystick.addEventListener('touchstart', handleJoystickStart, { passive: false });
+                document.addEventListener('touchmove', handleJoystickMove, { passive: false });
+                document.addEventListener('touchend', handleJoystickEnd, { passive: false });
+                document.addEventListener('touchcancel', handleJoystickEnd, { passive: false });
                 
-                // Mouse events for joystick (desktop testing)
-                joystick.addEventListener('mousedown', handleJoystickStart);
-                window.addEventListener('mousemove', handleJoystickMove);
-                window.addEventListener('mouseup', handleJoystickEnd);
+                // Button controls with better touch handling
+                const setupButton = (button, inputProperty) => {
+                    let buttonActive = false;
+                    
+                    const startHandler = (e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        buttonActive = true;
+                        this.mobileInput[inputProperty] = true;
+                        button.style.transform = 'scale(0.9)';
+                    };
+                    
+                    const endHandler = (e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        if (buttonActive) {
+                            buttonActive = false;
+                            this.mobileInput[inputProperty] = false;
+                            button.style.transform = 'scale(1)';
+                        }
+                    };
+                    
+                    button.addEventListener('touchstart', startHandler, { passive: false });
+                    button.addEventListener('touchend', endHandler, { passive: false });
+                    button.addEventListener('touchcancel', endHandler, { passive: false });
+                    
+                    // Mouse events for desktop testing
+                    button.addEventListener('mousedown', startHandler);
+                    button.addEventListener('mouseup', endHandler);
+                    button.addEventListener('mouseleave', endHandler);
+                };
                 
-                // Boost button
-                boostBtn.addEventListener('touchstart', (e) => {
-                    e.preventDefault();
-                    this.mobileInput.boost = true;
-                });
-                boostBtn.addEventListener('touchend', (e) => {
-                    e.preventDefault();
-                    this.mobileInput.boost = false;
-                });
-                boostBtn.addEventListener('mousedown', (e) => {
-                    e.preventDefault();
-                    this.mobileInput.boost = true;
-                });
-                boostBtn.addEventListener('mouseup', (e) => {
-                    e.preventDefault();
-                    this.mobileInput.boost = false;
-                });
+                setupButton(boostBtn, 'boost');
+                setupButton(brakeBtn, 'brake');
                 
-                // Brake button
-                brakeBtn.addEventListener('touchstart', (e) => {
+                // Prevent default touch behaviors on the game area
+                document.addEventListener('touchstart', (e) => {
+                    if (e.target.closest('#mobileControls')) {
+                        e.preventDefault();
+                    }
+                }, { passive: false });
+                
+                document.addEventListener('touchmove', (e) => {
                     e.preventDefault();
-                    this.mobileInput.brake = true;
-                });
-                brakeBtn.addEventListener('touchend', (e) => {
-                    e.preventDefault();
-                    this.mobileInput.brake = false;
-                });
-                brakeBtn.addEventListener('mousedown', (e) => {
-                    e.preventDefault();
-                    this.mobileInput.brake = true;
-                });
-                brakeBtn.addEventListener('mouseup', (e) => {
-                    e.preventDefault();
-                    this.mobileInput.brake = false;
-                });
+                }, { passive: false });
             }
             
             joinGame(playerName) {
